@@ -573,7 +573,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
         if not name or not name.strip():
             continue
 
-        if file_type == 'voice':
+        if file_id.startswith('CQ'):
             results.append(
                 InlineQueryResultCachedVoice(
                     id=str(sound_id),
