@@ -5,8 +5,8 @@ from datetime import datetime
 from aiogram import Bot, Dispatcher, types, Router, F
 from aiogram.filters import Command
 from aiogram.types import (
-    InlineQueryResultCachedAudio, InlineKeyboardMarkup, 
-    InlineKeyboardButton
+    InlineQueryResultCachedAudio, InlineQueryResultCachedVoice,
+    InlineKeyboardMarkup, InlineKeyboardButton
 )
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -31,12 +31,13 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             file_id TEXT NOT NULL,
+            file_type TEXT DEFAULT 'audio',
             added_by INTEGER,
             usage_count INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    for col in ['added_by', 'usage_count', 'created_at']:
+    for col in ['added_by', 'usage_count', 'created_at', 'file_type']:
         try:
             cursor.execute(f'ALTER TABLE sounds ADD COLUMN {col} INTEGER DEFAULT 0')
         except:
@@ -62,7 +63,6 @@ def init_db():
         )
     ''')
     
-    # ЖЁСТКАЯ ОЧИСТКА: удаляем ВСЕ записи с пустыми названиями
     cursor.execute("DELETE FROM sounds WHERE name IS NULL OR name = '' OR TRIM(name) = ''")
     cursor.execute("DELETE FROM sounds WHERE LOWER(name) IN ('none', 'null')")
     
@@ -71,13 +71,13 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print("✅ База данных готова (очищена от плохих записей)")
+    print("✅ База данных готова")
 
-def add_sound(name, file_id, added_by):
+def add_sound(name, file_id, file_type, added_by):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('INSERT INTO sounds (name, file_id, added_by) VALUES (?, ?, ?)',
-                   (name, file_id, added_by))
+    cursor.execute('INSERT INTO sounds (name, file_id, file_type, added_by) VALUES (?, ?, ?, ?)',
+                   (name, file_id, file_type, added_by))
     conn.commit()
     conn.close()
 
@@ -85,7 +85,7 @@ def search_sounds(query):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, name, file_id FROM sounds WHERE name IS NOT NULL AND name != '' AND LOWER(name) LIKE LOWER(?) ORDER BY usage_count DESC LIMIT 50",
+        "SELECT id, name, file_id, file_type FROM sounds WHERE name IS NOT NULL AND name != '' AND LOWER(name) LIKE LOWER(?) ORDER BY usage_count DESC LIMIT 50",
         (f'%{query}%',)
     )
     results = cursor.fetchall()
@@ -95,7 +95,7 @@ def search_sounds(query):
 def get_all_sounds():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, file_id FROM sounds WHERE name IS NOT NULL AND name != '' ORDER BY usage_count DESC")
+    cursor.execute("SELECT id, name, file_id, file_type FROM sounds WHERE name IS NOT NULL AND name != '' ORDER BY usage_count DESC")
     results = cursor.fetchall()
     conn.close()
     return results
@@ -166,10 +166,10 @@ def get_users_count():
 def get_all_users():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute('SELECT user_id FROM users')
+    cursor.execute('SELECT user_id, username, first_name FROM users')
     results = cursor.fetchall()
     conn.close()
-    return [row[0] for row in results]
+    return results
 
 def get_stats():
     conn = sqlite3.connect(DB_PATH)
@@ -210,6 +210,7 @@ def admin_keyboard(level):
     if level >= 3:
         buttons.append([InlineKeyboardButton(text="👥 Управление админами", callback_data="admin_menu")])
     if level >= 4:
+        buttons.append([InlineKeyboardButton(text="👥 Пользователи", callback_data="list_users")])
         buttons.append([InlineKeyboardButton(text="📢 Рассылка", callback_data="broadcast")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -319,7 +320,7 @@ async def btn_list_sounds(callback: types.CallbackQuery):
         await callback.message.answer("❌ Нет звуков в базе")
     else:
         text = "📋 Все звуки:\n\n"
-        for sound_id, name, _ in sounds[:50]:
+        for sound_id, name, _, _ in sounds[:50]:
             text += f"• {name} (ID: {sound_id})\n"
         if len(sounds) > 50:
             text += f"\n... и ещё {len(sounds) - 50} звуков"
@@ -351,7 +352,7 @@ async def btn_delete_menu(callback: types.CallbackQuery):
         await callback.answer()
         return
     text = "🗑 Выбери ID для удаления:\n\n"
-    for sound_id, name, _ in sounds[:30]:
+    for sound_id, name, _, _ in sounds[:30]:
         text += f"• ID: {sound_id} | {name}\n"
     text += "\nИспользуй команду: /delete ID"
     await callback.message.answer(text)
@@ -443,7 +444,7 @@ async def broadcast_post(message: types.Message, state: FSMContext, bot: Bot):
     success = 0
     failed = 0
     await message.answer(f"📤 Начинаю рассылку на {len(users)} пользователей...")
-    for user_id in users:
+    for user_id, username, first_name in users:
         try:
             if message.text:
                 await bot.send_message(user_id, message.text)
@@ -480,12 +481,17 @@ async def get_name(message: types.Message, state: FSMContext):
 @router.message(AddSound.waiting_for_file)
 async def get_file(message: types.Message, state: FSMContext, bot: Bot):
     file_id = None
+    file_type = 'audio'
+    
     if message.voice:
         file_id = message.voice.file_id
+        file_type = 'voice'
     elif message.audio:
         file_id = message.audio.file_id
+        file_type = 'audio'
     elif message.document and message.document.mime_type and 'audio' in message.document.mime_type:
         file_id = message.document.file_id
+        file_type = 'audio'
     else:
         await message.answer("❌ Отправь аудиофайл (MP3) или голосовое!")
         return
@@ -496,7 +502,7 @@ async def get_file(message: types.Message, state: FSMContext, bot: Bot):
 
     data = await state.get_data()
     name = data['name']
-    add_sound(name, file_id, message.from_user.id)
+    add_sound(name, file_id, file_type, message.from_user.id)
     await message.answer(f"✅ Звук «{name}» добавлен!\nПроверь: @MellstroyMP3_bot {name}")
     await state.clear()
 
@@ -534,6 +540,26 @@ async def get_admin_level_state(message: types.Message, state: FSMContext):
     except:
         await message.answer("❌ Отправь число 1, 2 или 3!")
 
+# ===== КНОПКА ПОЛЬЗОВАТЕЛИ =====
+@router.callback_query(lambda c: c.data == "list_users")
+async def btn_list_users(callback: types.CallbackQuery):
+    if get_admin_level(callback.from_user.id) < 4:
+        await callback.answer("❌ Только владелец!", show_alert=True)
+        return
+    
+    users = get_all_users()
+    text = f"👥 Все пользователи бота: {len(users)}\n\n"
+    
+    for i, (user_id, username, first_name) in enumerate(users[:50]):
+        name = username or first_name or "Без имени"
+        text += f"{i+1}. {name} (`{user_id}`)\n"
+    
+    if len(users) > 50:
+        text += f"\n... и ещё {len(users) - 50} пользователей"
+    
+    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()
+
 # ===== ИНЛАЙН-ПОИСК =====
 @router.inline_query()
 async def inline_search(inline_query: types.InlineQuery, bot: Bot):
@@ -544,20 +570,29 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
     sounds = search_sounds(query) if query else get_all_sounds()
 
     results = []
-    for sound_id, name, file_id in sounds:
-        print(f"ID={sound_id}, NAME={repr(name)}, FILE={repr(file_id)}")
+    for sound_id, name, file_id, file_type in sounds:
+        print(f"ID={sound_id}, NAME={repr(name)}, TYPE={file_type}, FILE={repr(file_id)}")
 
         if not name or not name.strip():
             continue
 
         try:
-            results.append(
-                InlineQueryResultCachedAudio(
-                    id=str(sound_id),
-                    audio_file_id=file_id,
-                    title=name.strip()
+            if file_type == 'voice':
+                results.append(
+                    InlineQueryResultCachedVoice(
+                        id=str(sound_id),
+                        voice_file_id=file_id,
+                        title=name.strip()
+                    )
                 )
-            )
+            else:
+                results.append(
+                    InlineQueryResultCachedAudio(
+                        id=str(sound_id),
+                        audio_file_id=file_id,
+                        title=name.strip()
+                    )
+                )
         except Exception as e:
             print("ERROR:", sound_id, e)
 
@@ -566,6 +601,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
     increment_usage(int(chosen_result.result_id))
+
 # ===== ЗАПУСК =====
 async def main():
     print("🚀 Запуск Mellstroy Sounds Bot...")
