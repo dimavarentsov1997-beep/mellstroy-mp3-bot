@@ -62,14 +62,16 @@ def init_db():
         )
     ''')
     
-    cursor.execute("DELETE FROM sounds WHERE name IS NULL OR name = ''")
+    # ЖЁСТКАЯ ОЧИСТКА: удаляем ВСЕ записи с пустыми названиями
+    cursor.execute("DELETE FROM sounds WHERE name IS NULL OR name = '' OR TRIM(name) = ''")
+    cursor.execute("DELETE FROM sounds WHERE LOWER(name) IN ('none', 'null')")
     
     cursor.execute('INSERT OR IGNORE INTO admins (user_id, username, level) VALUES (?, ?, ?)',
                    (OWNER_ID, 'OWNER', 4))
     
     conn.commit()
     conn.close()
-    print("✅ База данных готова")
+    print("✅ База данных готова (очищена от плохих записей)")
 
 def add_sound(name, file_id, added_by):
     conn = sqlite3.connect(DB_PATH)
