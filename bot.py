@@ -565,17 +565,26 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
     sounds = search_sounds(query) if query else get_all_sounds()
 
     results = []
-    for sound_id, name, file_id in sounds:
+    for sound_id, name, file_id, file_type in sounds:
         if not name or not name.strip():
-            name = "Без названия"
+            continue
 
-        results.append(
-            InlineQueryResultCachedAudio(
-                id=str(sound_id),
-                audio_file_id=file_id,
-                title=name.strip()
+        if file_id.startswith('CQ'):
+            results.append(
+                InlineQueryResultCachedVoice(
+                    id=str(sound_id),
+                    voice_file_id=file_id,
+                    title=name.strip()
+                )
             )
-        )
+        else:
+            results.append(
+                InlineQueryResultCachedAudio(
+                    id=str(sound_id),
+                    audio_file_id=file_id,
+                    title=name.strip()
+                )
+            )
 
     await inline_query.answer(results, cache_time=1)
 
