@@ -64,7 +64,6 @@ def init_db():
     ''')
     
     cursor.execute("DELETE FROM sounds WHERE name IS NULL OR name = '' OR TRIM(name) = ''")
-    cursor.execute("DELETE FROM sounds WHERE LOWER(name) IN ('none', 'null')")
     
     cursor.execute('INSERT OR IGNORE INTO admins (user_id, username, level) VALUES (?, ?, ?)',
                    (OWNER_ID, 'OWNER', 4))
@@ -482,32 +481,16 @@ async def get_name(message: types.Message, state: FSMContext):
 async def get_file(message: types.Message, state: FSMContext, bot: Bot):
     file_id = None
     file_type = 'audio'
-
+    
     if message.voice:
         file_id = message.voice.file_id
         file_type = 'voice'
     elif message.audio:
-        data = await state.get_data()
-        name = data['name']
-        sent = await bot.send_audio(
-            chat_id=message.chat.id,
-            audio=message.audio.file_id,
-            title=name,
-            performer="Mellstroy"
-        )
-        file_id = sent.audio.file_id
-        await sent.delete()
+        file_id = message.audio.file_id
+        file_type = 'audio'
     elif message.document and message.document.mime_type and 'audio' in message.document.mime_type:
-        data = await state.get_data()
-        name = data['name']
-        sent = await bot.send_audio(
-            chat_id=message.chat.id,
-            audio=message.document.file_id,
-            title=name,
-            performer="Mellstroy"
-        )
-        file_id = sent.audio.file_id
-        await sent.delete()
+        file_id = message.document.file_id
+        file_type = 'audio'
     else:
         await message.answer("❌ Отправь аудиофайл (MP3) или голосовое!")
         return
@@ -590,7 +573,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
         if not name or not name.strip():
             continue
 
-        if file_id.startswith('CQ'):
+        if file_type == 'voice':
             results.append(
                 InlineQueryResultCachedVoice(
                     id=str(sound_id),
@@ -608,7 +591,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
             )
 
     await inline_query.answer(results, cache_time=1)
-    
+
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
     increment_usage(int(chosen_result.result_id))
