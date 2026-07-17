@@ -542,29 +542,30 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
 
     query = inline_query.query.strip()
     sounds = search_sounds(query) if query else get_all_sounds()
-results = []
 
-for sound_id, name, file_id in sounds:
-    print(f"ID={sound_id}, NAME={repr(name)}, FILE={repr(file_id)}")
+    results = []
+    for sound_id, name, file_id in sounds:
+        print(f"ID={sound_id}, NAME={repr(name)}, FILE={repr(file_id)}")
 
-    if not name or not name.strip():
-        continue
+        if not name or not name.strip():
+            continue
 
-    try:
-        results.append(
-            InlineQueryResultCachedAudio(
-                id=str(sound_id),
-                audio_file_id=file_id,
-                title=name.strip()
+        try:
+            results.append(
+                InlineQueryResultCachedAudio(
+                    id=str(sound_id),
+                    audio_file_id=file_id,
+                    title=name.strip()
+                )
             )
-        )
-    except Exception as e:
-        print("ERROR:", sound_id, e)
+        except Exception as e:
+            print("ERROR:", sound_id, e)
+
+    await inline_query.answer(results, cache_time=1)
 
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
     increment_usage(int(chosen_result.result_id))
-
 # ===== ЗАПУСК =====
 async def main():
     print("🚀 Запуск Mellstroy Sounds Bot...")
