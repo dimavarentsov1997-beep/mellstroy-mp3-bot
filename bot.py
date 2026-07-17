@@ -481,10 +481,20 @@ async def get_name(message: types.Message, state: FSMContext):
 async def get_file(message: types.Message, state: FSMContext, bot: Bot):
     file_id = None
     file_type = 'audio'
-    
+
+    data = await state.get_data()
+    name = data['name']
+
     if message.voice:
-        file_id = message.voice.file_id
+        # Переотправляем голосовое с названием, чтобы Telegram запомнил title
+        sent = await bot.send_voice(
+            chat_id=message.chat.id,
+            voice=message.voice.file_id,
+            caption=name
+        )
+        file_id = sent.voice.file_id
         file_type = 'voice'
+        await sent.delete()
     elif message.audio:
         file_id = message.audio.file_id
         file_type = 'audio'
@@ -499,12 +509,10 @@ async def get_file(message: types.Message, state: FSMContext, bot: Bot):
         await message.answer("❌ Не удалось получить файл.")
         return
 
-    data = await state.get_data()
-    name = data['name']
     add_sound(name, file_id, file_type, message.from_user.id)
     await message.answer(f"✅ Звук «{name}» добавлен!\nПроверь: @MellstroyMP3_bot {name}")
     await state.clear()
-
+    
 # ===== ДОБАВЛЕНИЕ АДМИНА =====
 @router.message(AddAdmin.waiting_for_user_id)
 async def get_admin_id(message: types.Message, state: FSMContext):
