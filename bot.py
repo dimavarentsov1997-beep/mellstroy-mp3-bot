@@ -543,18 +543,24 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
     query = inline_query.query.strip()
     sounds = search_sounds(query) if query else get_all_sounds()
 
-    results = []
-    for sound_id, name, file_id in sounds:
-        if not name or len(name.strip()) == 0:
-            continue
+   results = []
+
+for sound_id, name, file_id in sounds:
+    print(f"ID={sound_id}, NAME={repr(name)}, FILE={repr(file_id)}")
+
+    if not name or not name.strip():
+        continue
+
+    try:
         results.append(
             InlineQueryResultCachedAudio(
                 id=str(sound_id),
                 audio_file_id=file_id,
-                title=name
+                title=name.strip()
             )
         )
-    await inline_query.answer(results, cache_time=1)
+    except Exception as e:
+        print("ERROR:", sound_id, e)
 
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
