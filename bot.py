@@ -585,8 +585,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
             results.append(
                 InlineQueryResultCachedVoice(
                     id=str(sound_id),
-                    voice_file_id=file_id,
-                    title=name.strip()
+                    voice_file_id=file_id
                 )
             )
         else:
@@ -599,7 +598,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
             )
 
     await inline_query.answer(results, cache_time=1)
-
+    
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
     increment_usage(int(chosen_result.result_id))
