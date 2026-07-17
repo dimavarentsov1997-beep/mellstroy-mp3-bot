@@ -585,8 +585,8 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
     query = inline_query.query.strip()
     sounds = search_sounds(query) if query else get_all_sounds()
 
-results = []
-for sound_id, name, file_id, file_type in sounds:
+    results = []
+    for sound_id, name, file_id, file_type in sounds:
         if not name or not name.strip():
             continue
 
@@ -608,7 +608,7 @@ for sound_id, name, file_id, file_type in sounds:
             )
 
     await inline_query.answer(results, cache_time=1)
-
+    
 @router.chosen_inline_result()
 async def on_sound_chosen(chosen_result: types.ChosenInlineResult):
     increment_usage(int(chosen_result.result_id))
