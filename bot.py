@@ -542,8 +542,7 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
 
     query = inline_query.query.strip()
     sounds = search_sounds(query) if query else get_all_sounds()
-
-   results = []
+results = []
 
 for sound_id, name, file_id in sounds:
     print(f"ID={sound_id}, NAME={repr(name)}, FILE={repr(file_id)}")
