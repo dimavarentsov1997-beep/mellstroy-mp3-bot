@@ -585,32 +585,28 @@ async def inline_search(inline_query: types.InlineQuery, bot: Bot):
     query = inline_query.query.strip()
     sounds = search_sounds(query) if query else get_all_sounds()
 
-    results = []
+results = []
     for sound_id, name, file_id, file_type in sounds:
-        print(f"ID={sound_id}, NAME={repr(name)}, TYPE={file_type}, FILE={repr(file_id)}")
-
         if not name or not name.strip():
             continue
 
-        try:
-            if file_type == 'voice':
-                results.append(
-                    InlineQueryResultCachedVoice(
-                        id=str(sound_id),
-                        voice_file_id=file_id,
-                        title=name.strip()
-                    )
+        # Если file_id начинается с 'CQ' — это голосовое, даже если тип 'audio'
+        if file_id.startswith('CQ'):
+            results.append(
+                InlineQueryResultCachedVoice(
+                    id=str(sound_id),
+                    voice_file_id=file_id,
+                    title=name.strip()
                 )
-            else:
-                results.append(
-                    InlineQueryResultCachedAudio(
-                        id=str(sound_id),
-                        audio_file_id=file_id,
-                        title=name.strip()
-                    )
+            )
+        else:
+            results.append(
+                InlineQueryResultCachedAudio(
+                    id=str(sound_id),
+                    audio_file_id=file_id,
+                    title=name.strip()
                 )
-        except Exception as e:
-            print("ERROR:", sound_id, e)
+            )
 
     await inline_query.answer(results, cache_time=1)
 
